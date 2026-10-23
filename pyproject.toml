@@ -6,7 +6,6 @@ authors = [
     { name = "William Fu-Hinthorn", email = "13333726+hinthornw@users.noreply.github.com" },
 ]
 readme = "README.md"
-license = "MIT"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "langgraph>=1.2.11",
