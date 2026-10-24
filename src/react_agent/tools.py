@@ -46,4 +46,9 @@ async def search(query: str) -> dict[str, Any]:
         return cast(dict[str, Any], response.json())
 
 
-TOOLS: List[Callable[..., Any]] = [search]
+def query() -> str:
+    """Query business data."""
+    return ""
+
+
+TOOLS: List[Callable[..., Any]] = [search, query]
