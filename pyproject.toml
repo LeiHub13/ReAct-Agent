@@ -16,6 +16,8 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "httpx>=0.28.1",
     "langchain-deepseek>=1.1.1",
+    "fastapi>=0.162.0",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 
@@ -34,7 +36,7 @@ packages = ["langgraph.templates.react_agent", "react_agent"]
 
 
 [tool.setuptools.package-data]
-"*" = ["py.typed"]
+"*" = ["py.typed", "web/*.html"]
 
 [tool.ruff]
 lint.select = [
@@ -63,6 +65,5 @@ convention = "google"
 [dependency-groups]
 dev = [
     "anyio>=4.14.2",
-    "langgraph-cli[inmem]>=0.4.31",
     "pytest>=9.1.1",
 ]

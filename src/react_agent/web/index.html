@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReAct Agent</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --ink: #1b1b1b;
+    --muted: #6b6b66;
+    --line: #e2dfd8;
+    --accent: #1f4d3f;
+    --accent-ink: #ffffff;
+    --tool-bg: #f7f6f2;
+    --error: #b42318;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+
+  .app {
+    height: 100dvh;
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0 20px;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 4px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+  }
+
+  .sub {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .session {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .session code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 3px 6px;
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ghost {
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .ghost:hover { border-color: var(--muted); color: var(--ink); }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .empty {
+    margin: auto;
+    text-align: center;
+    max-width: 460px;
+    padding: 40px 0;
+  }
+
+  .empty h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+  .empty p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .chips button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 7px 13px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .chips button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+
+  .bubble {
+    max-width: 88%;
+    border-radius: 14px;
+    padding: 11px 14px;
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .user .bubble {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-bottom-right-radius: 4px;
+  }
+
+  .assistant .bubble {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 4px;
+    min-width: 120px;
+  }
+
+  .tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .tool {
+    background: var(--tool-bg);
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .tool-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #c8a24a;
+    flex: 0 0 auto;
+  }
+
+  .tool.done .dot { background: var(--accent); }
+  .tool.failed .dot { background: var(--error); }
+
+  .tool pre {
+    margin: 6px 0 0;
+    padding: 0;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 120px;
+    overflow: auto;
+  }
+
+  .cursor::after {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 14px;
+    margin-left: 2px;
+    vertical-align: -2px;
+    background: var(--ink);
+    animation: blink 1s steps(1) infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .error {
+    color: var(--error);
+    font-size: 13px;
+  }
+
+  .composer {
+    border-top: 1px solid var(--line);
+    padding: 14px 0 18px;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  textarea {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 11px 12px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    max-height: 160px;
+    outline: none;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+
+  .primary, .stop {
+    border: 0;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    height: 44px;
+  }
+
+  .primary { background: var(--accent); color: var(--accent-ink); }
+  .primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .stop { background: #ece9e2; color: var(--ink); }
+
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  @media (max-width: 560px) {
+    .app { padding: 0 12px; }
+    header { align-items: flex-start; flex-direction: column; gap: 10px; }
+    .session code { max-width: 130px; }
+    .bubble { max-width: 94%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>ReAct Agent</h1>
+      <p class="sub">LangGraph + DeepSeek，自动判断是否需要搜索</p>
+    </div>
+    <div class="session">
+      <span>会话</span>
+      <code id="thread-id">—</code>
+      <button class="ghost" id="new-thread" type="button">新会话</button>
+    </div>
+  </header>
+
+  <main id="messages">
+    <div class="empty" id="empty">
+      <h2>今天想查点什么？</h2>
+      <p>智能体会在需要时自动调用搜索工具，执行过程会显示在回答上方。</p>
+      <div class="chips">
+        <button type="button" data-prompt="LangChain 的创始人是谁？">LangChain 创始人</button>
+        <button type="button" data-prompt="帮我搜索今天的 AI 领域重要新闻，用三点总结">今日 AI 新闻</button>
+        <button type="button" data-prompt="用一句话解释什么是 ReAct Agent">ReAct 是什么</button>
+      </div>
+    </div>
+  </main>
+
+  <form class="composer" id="composer">
+    <textarea id="input" rows="1" placeholder="输入问题，Enter 发送，Shift + Enter 换行"></textarea>
+    <button class="primary" id="send" type="submit">发送</button>
+    <button class="stop" id="stop" type="button" hidden>停止</button>
+  </form>
+
+  <div class="footer">
+    <span id="status">就绪</span>
+    <span>答案由模型生成，请自行核实</span>
+  </div>
+</div>
+
+<script>
+const messagesEl = document.querySelector("#messages");
+const emptyEl = document.querySelector("#empty");
+const composerEl = document.querySelector("#composer");
+const inputEl = document.querySelector("#input");
+const sendEl = document.querySelector("#send");
+const stopEl = document.querySelector("#stop");
+const threadEl = document.querySelector("#thread-id");
+const statusEl = document.querySelector("#status");
+
+const TOOL_NAMES = { search: "网页搜索", query: "业务查询" };
+
+let threadId = crypto.randomUUID();
+let controller = null;
+let currentToolNodes = new Map();
+let currentToolsEl = null;
+let assistantTextEl = null;
+
+threadEl.textContent = threadId;
+threadEl.title = threadId;
+
+function setBusy(busy) {
+  sendEl.disabled = busy;
+  stopEl.hidden = !busy;
+  statusEl.textContent = busy ? "生成中…" : "就绪";
+}
+
+function scrollToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendUser(text) {
+  emptyEl?.remove();
+  const row = document.createElement("div");
+  row.className = "row user";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
+  row.append(bubble);
+  messagesEl.append(row);
+  scrollToBottom();
+}
+
+function appendAssistant() {
+  const row = document.createElement("div");
+  row.className = "row assistant";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  const tools = document.createElement("div");
+  tools.className = "tools";
+  const text = document.createElement("div");
+  text.className = "cursor";
+  bubble.append(tools, text);
+  row.append(bubble);
+  messagesEl.append(row);
+  assistantTextEl = text;
+  currentToolsEl = tools;
+  scrollToBottom();
+  return { tools, text };
+}
+
+function toolLabel(name) {
+  return TOOL_NAMES[name] || name || "工具";
+}
+
+function addToolCall({ id, name, args }) {
+  if (!assistantTextEl) appendAssistant();
+  const node = document.createElement("div");
+  node.className = "tool";
+  const head = document.createElement("div");
+  head.className = "tool-head";
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  const label = document.createElement("span");
+  label.textContent = toolLabel(name);
+  const state = document.createElement("span");
+  state.textContent = "执行中";
+  state.style.fontWeight = "400";
+  state.style.color = "var(--muted)";
+  head.append(dot, label, state);
+  const detail = document.createElement("pre");
+  detail.textContent = JSON.stringify(args ?? {}, null, 2);
+  node.append(head, detail);
+  currentToolsEl.append(node);
+  currentToolNodes.set(id, { node, state });
+  scrollToBottom();
+}
+
+function finishTool({ id, name, status, summary }) {
+  const entry = currentToolNodes.get(id);
+  if (!entry) return;
+  const ok = status !== "error";
+  entry.node.classList.add(ok ? "done" : "failed");
+  entry.state.textContent = ok ? "已完成" : "失败";
+  const detail = entry.node.querySelector("pre");
+  detail.textContent = summary || (ok ? "无返回内容" : "工具执行失败");
+  if (name) entry.node.querySelector(".tool-head span:nth-child(2)").textContent = toolLabel(name);
+  scrollToBottom();
+}
+
+function appendToken(text) {
+  if (!assistantTextEl) appendAssistant();
+  assistantTextEl.classList.add("cursor");
+  assistantTextEl.textContent += text;
+  scrollToBottom();
+}
+
+function finishAssistant() {
+  assistantTextEl?.classList.remove("cursor");
+}
+
+function appendError(message) {
+  if (!assistantTextEl) appendAssistant();
+  assistantTextEl.classList.remove("cursor");
+  const el = document.createElement("div");
+  el.className = "error";
+  el.textContent = message;
+  assistantTextEl.after(el);
+  scrollToBottom();
+}
+
+async function sendMessage(message) {
+  appendUser(message);
+  appendAssistant();
+
+  controller = new AbortController();
+  setBusy(true);
+  statusEl.textContent = "思考中…";
+
+  try {
+    const response = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, thread_id: threadId }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`请求失败（HTTP ${response.status}）：${await response.text()}`);
+    }
+    if (!response.body) {
+      throw new Error("当前浏览器不支持流式响应");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
+
+      let index;
+      while ((index = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, index);
+        buffer = buffer.slice(index + 2);
+
+        let event = "message";
+        const dataLines = [];
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("event:")) {
+            event = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trimStart());
+          }
+        }
+        if (!dataLines.length) continue;
+
+        let payload = {};
+        try {
+          payload = JSON.parse(dataLines.join("\n"));
+        } catch {
+          continue;
+        }
+
+        if (event === "meta") {
+          threadId = payload.thread_id;
+          threadEl.textContent = threadId;
+          threadEl.title = threadId;
+        } else if (event === "token") {
+          statusEl.textContent = "生成中…";
+          appendToken(payload.content ?? "");
+        } else if (event === "tool_call") {
+          statusEl.textContent = `调用 ${toolLabel(payload.name)}…`;
+          addToolCall(payload);
+        } else if (event === "tool_result") {
+          statusEl.textContent = "已获取工具结果…";
+          finishTool(payload);
+        } else if (event === "error") {
+          appendError(payload.error || "执行失败");
+        } else if (event === "done") {
+          finishAssistant();
+          statusEl.textContent = "就绪";
+        }
+      }
+    }
+  } catch (error) {
+    if (error.name === "AbortError") {
+      appendError("已停止生成");
+      statusEl.textContent = "已停止";
+    } else {
+      appendError(error.message || "网络错误");
+      statusEl.textContent = "请求失败";
+    }
+  } finally {
+    finishAssistant();
+    controller = null;
+    setBusy(false);
+  }
+}
+
+composerEl.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const message = inputEl.value.trim();
+  if (!message || controller) return;
+  inputEl.value = "";
+  inputEl.style.height = "auto";
+  sendMessage(message);
+});
+
+inputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    composerEl.requestSubmit();
+  }
+});
+
+inputEl.addEventListener("input", () => {
+  inputEl.style.height = "auto";
+  inputEl.style.height = `${Math.min(inputEl.scrollHeight, 160)}px`;
+});
+
+stopEl.addEventListener("click", () => controller?.abort());
+
+document.querySelector("#new-thread").addEventListener("click", () => {
+  if (controller) controller.abort();
+  threadId = crypto.randomUUID();
+  threadEl.textContent = threadId;
+  threadEl.title = threadId;
+  currentToolNodes = new Map();
+  currentToolsEl = null;
+  assistantTextEl = null;
+  messagesEl.replaceChildren(emptyEl);
+  statusEl.textContent = "就绪";
+  inputEl.focus();
+});
+
+document.querySelectorAll(".chips button").forEach((button) => {
+  button.addEventListener("click", () => {
+    const prompt = button.dataset.prompt;
+    if (!prompt || controller) return;
+    sendMessage(prompt);
+  });
+});
+
+inputEl.focus();
+</script>
+</body>
+</html>
